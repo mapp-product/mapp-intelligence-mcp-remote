@@ -1,14 +1,23 @@
 /**
  * Auth0 Post-Login Action: Mapp Credential Onboarding
  *
- * Redirects first-time users to the credential setup page
- * so they can enter their Mapp Intelligence API credentials
- * before completing the login flow.
+ * 1. Denies login to users whose email is not @mapp.com
+ * 2. Redirects first-time users to the credential setup page
+ *    so they can enter their Mapp Intelligence API credentials
+ *    before completing the login flow.
  *
  * Once credentials are configured, the user's app_metadata
  * is flagged so subsequent logins skip the redirect.
  */
 exports.onExecutePostLogin = async (event, api) => {
+  // --- Domain restriction ---
+  const email = event.user.email || "";
+  const domain = email.split("@")[1];
+  if (!domain || domain.toLowerCase() !== "mapp.com") {
+    api.access.deny("Access is restricted to @mapp.com email addresses.");
+    return;
+  }
+
   // Skip if credentials are already configured
   if (event.user.app_metadata && event.user.app_metadata.mapp_credentials_configured) {
     return;
