@@ -10,7 +10,7 @@ import {
   metadataCorsOptionsRequestHandler,
 } from "mcp-handler";
 
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || "";
+const AUTH0_DOMAIN = (process.env.AUTH0_DOMAIN || "").trim();
 
 const handler = protectedResourceHandler({
   authServerUrls: [`https://${AUTH0_DOMAIN}`],
