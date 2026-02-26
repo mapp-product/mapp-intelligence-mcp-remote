@@ -11,7 +11,7 @@ export async function GET() {
     auth0Domain: process.env.AUTH0_DOMAIN ? "configured" : "missing",
     auth0Audience: process.env.AUTH0_AUDIENCE ? "configured" : "missing",
     encryptionKey: process.env.CREDENTIAL_ENCRYPTION_KEY ? "configured" : "missing",
-    redisUrl: process.env.UPSTASH_REDIS_REST_URL ? "configured" : "missing",
+    redisUrl: (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) ? "configured" : "missing",
   };
 
   const allConfigured = Object.values(checks).every(
