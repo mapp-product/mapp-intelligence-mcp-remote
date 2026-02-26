@@ -47,18 +47,26 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const exists = await hasCredentials(auth.sub);
+  try {
+    const exists = await hasCredentials(auth.sub);
 
-  if (exists) {
-    const creds = await loadCredentials(auth.sub);
-    return NextResponse.json({
-      configured: true,
-      clientId: creds ? maskString(creds.clientId) : "****",
-      baseUrl: creds?.baseUrl || "https://intelligence.eu.mapp.com",
-    });
+    if (exists) {
+      const creds = await loadCredentials(auth.sub);
+      return NextResponse.json({
+        configured: true,
+        clientId: creds ? maskString(creds.clientId) : "****",
+        baseUrl: creds?.baseUrl || "https://intelligence.eu.mapp.com",
+      });
+    }
+
+    return NextResponse.json({ configured: false });
+  } catch (err) {
+    console.error("Failed to load credentials:", err);
+    return NextResponse.json(
+      { error: "Failed to load credential status." },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ configured: false });
 }
 
 /**
@@ -97,11 +105,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  await saveCredentials(auth.sub, {
-    clientId: body.clientId,
-    clientSecret: body.clientSecret,
-    baseUrl: body.baseUrl || "https://intelligence.eu.mapp.com",
-  });
+  try {
+    await saveCredentials(auth.sub, {
+      clientId: body.clientId,
+      clientSecret: body.clientSecret,
+      baseUrl: body.baseUrl || "https://intelligence.eu.mapp.com",
+    });
+  } catch (err) {
+    console.error("Failed to save credentials:", err);
+    return NextResponse.json(
+      { error: "Failed to save credentials. Please try again." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     success: true,
@@ -122,7 +138,15 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  await deleteCredentials(auth.sub);
+  try {
+    await deleteCredentials(auth.sub);
+  } catch (err) {
+    console.error("Failed to delete credentials:", err);
+    return NextResponse.json(
+      { error: "Failed to delete credentials." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     success: true,

@@ -107,7 +107,13 @@ export default function SettingsPage() {
         body: JSON.stringify({ clientId, clientSecret, baseUrl }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: { error?: string; success?: boolean } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: `Server error (${res.status})` };
+      }
 
       if (res.ok) {
         setSaveState("saved");
