@@ -1,0 +1,35 @@
+{
+  "name": "mapp-intelligence-mcp-remote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remote MCP Server for Mapp Intelligence Analytics API with Auth0 OAuth",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.36.2",
+    "jose": "^6.0.11",
+    "mcp-handler": "^1.0.2",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "mcp",
+    "mapp",
+    "intelligence",
+    "analytics",
+    "model-context-protocol",
+    "auth0",
+    "oauth"
+  ],
+  "license": "MIT"
+}
