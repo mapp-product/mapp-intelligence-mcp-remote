@@ -1,5 +1,5 @@
 /**
- * Per-user Mapp credential store backed by Upstash Redis (Vercel KV replacement).
+ * Per-user Mapp credential store backed by Upstash Redis.
  *
  * Credentials are encrypted at rest using AES-256-GCM.
  * Keys are namespaced by the OAuth subject (`sub`) claim.
@@ -26,9 +26,6 @@ export interface StoredCredentials {
   baseUrl: string;
 }
 
-/**
- * Save Mapp credentials for a user (identified by OAuth sub).
- */
 export async function saveCredentials(
   sub: string,
   creds: StoredCredentials
@@ -39,9 +36,6 @@ export async function saveCredentials(
   await redis.set(`${KEY_PREFIX}${sub}`, encrypted);
 }
 
-/**
- * Load Mapp credentials for a user. Returns null if not found.
- */
 export async function loadCredentials(
   sub: string
 ): Promise<MappCredentials | null> {
@@ -62,17 +56,11 @@ export async function loadCredentials(
   }
 }
 
-/**
- * Delete stored credentials for a user.
- */
 export async function deleteCredentials(sub: string): Promise<void> {
   const redis = getRedis();
   await redis.del(`${KEY_PREFIX}${sub}`);
 }
 
-/**
- * Check if a user has stored credentials (without decrypting).
- */
 export async function hasCredentials(sub: string): Promise<boolean> {
   const redis = getRedis();
   const exists = await redis.exists(`${KEY_PREFIX}${sub}`);
