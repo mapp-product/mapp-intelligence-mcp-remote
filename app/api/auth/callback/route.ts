@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
         client_secret: settingsClientSecret,
         code,
         redirect_uri: callbackUrl,
+        audience,
       }),
     });
 
