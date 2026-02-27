@@ -10,18 +10,19 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { verifyAuth0Token } from "@/lib/auth";
 import { registerTools } from "@/lib/tools";
 
-// Create the base MCP handler with all Mapp Intelligence tools
-const baseHandler = createMcpHandler(
-  (server) => {
-    registerTools(server);
-  },
-  {},
-  {
-    basePath: "/api",
-    maxDuration: 120,
-    verboseLogs: process.env.NODE_ENV !== "production",
-  }
-);
+function createBaseHandler() {
+  return createMcpHandler(
+    (server) => {
+      registerTools(server);
+    },
+    {},
+    {
+      basePath: "/api",
+      maxDuration: 120,
+      verboseLogs: process.env.NODE_ENV !== "production",
+    }
+  );
+}
 
 // Token verification callback for MCP auth
 const verifyToken = async (
@@ -36,7 +37,12 @@ const verifyToken = async (
   return {
     token: bearerToken,
     scopes: payload.scope ? payload.scope.split(" ") : [],
-    clientId: payload.sub,
+    clientId:
+      typeof payload.azp === "string"
+        ? payload.azp
+        : typeof payload.client_id === "string"
+          ? payload.client_id
+          : payload.sub,
     extra: {
       sub: payload.sub,
       iss: payload.iss,
@@ -44,10 +50,15 @@ const verifyToken = async (
   };
 };
 
-// Wrap with OAuth auth
-const handler = withMcpAuth(baseHandler, verifyToken, {
-  required: true,
-  resourceMetadataPath: "/.well-known/oauth-protected-resource",
-});
+function createAuthedHandler() {
+  return withMcpAuth(createBaseHandler(), verifyToken, {
+    required: true,
+    resourceMetadataPath: "/.well-known/oauth-protected-resource",
+  });
+}
 
-export { handler as GET, handler as POST, handler as DELETE };
+async function handle(req: Request): Promise<Response> {
+  return createAuthedHandler()(req);
+}
+
+export { handle as GET, handle as POST, handle as DELETE };
