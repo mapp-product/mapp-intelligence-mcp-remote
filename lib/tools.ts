@@ -16,6 +16,7 @@ import {
   pollForResult,
   type MappCredentials,
 } from "./mapp-api";
+import { assertTrustedMappAbsoluteUrl } from "./mapp-base-url";
 import { loadCredentials } from "./credential-store";
 
 /**
@@ -187,15 +188,21 @@ Example queryObject:
         body
       );
 
-      if (createResp.resultUrl) {
+      if (typeof createResp.resultUrl === "string") {
+        assertTrustedMappAbsoluteUrl(createResp.resultUrl);
         const result = await apiGetAbsolute(creds, createResp.resultUrl);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
-      if (createResp.statusUrl) {
+      if (typeof createResp.statusUrl === "string") {
+        assertTrustedMappAbsoluteUrl(createResp.statusUrl);
         const statusResp = await pollForResult(creds, createResp.statusUrl);
+        if (typeof statusResp.resultUrl !== "string") {
+          throw new Error("Analysis status response is missing resultUrl");
+        }
+        assertTrustedMappAbsoluteUrl(statusResp.resultUrl);
         const result = await apiGetAbsolute(creds, statusResp.resultUrl);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -383,6 +390,7 @@ Submits the report, polls for completion, and returns combined results.`,
         for (const qs of states) {
           if (qs.status === "SUCCESS" && qs.resultUrl) {
             try {
+              assertTrustedMappAbsoluteUrl(qs.resultUrl);
               const result = await apiGetAbsolute(creds, qs.resultUrl);
               results.push({ elementId: qs.elementId, ...result });
             } catch (e: unknown) {

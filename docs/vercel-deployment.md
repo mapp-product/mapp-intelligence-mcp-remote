@@ -28,7 +28,7 @@ This document covers everything needed to deploy the Mapp Intelligence MCP Remot
 | Framework | Next.js 15 |
 | Build command | `next build` |
 | Output directory | `.next` (default) |
-| Node.js version | 20.x |
+| Node.js version | 24.x |
 | Runtime | Node.js serverless functions (not Edge) |
 | Repository | `github.com/mapp-product/mapp-intelligence-mcp-remote` |
 
@@ -67,6 +67,7 @@ All environment variables must be configured in the **Vercel Dashboard → Proje
 |---|---|---|
 | `AUTH0_DOMAIN` | Auth0 tenant domain (server-side) | `mapp-product.eu.auth0.com` |
 | `AUTH0_AUDIENCE` | Auth0 API identifier / JWT audience (server-side) | `https://mapp-intelligence-mcp.vercel.app/api/mcp` |
+| `MAPP_API_BASE_URL` | Fixed downstream Mapp API endpoint | `https://intelligence.eu.mapp.com` |
 | `AUTH0_ACTION_SECRET` | Shared HMAC secret for session tokens issued by the Auth0 Post-Login Action | 64-char hex string |
 | `AUTH0_SETTINGS_CLIENT_ID` | Auth0 Regular Web App client ID for the settings page OAuth flow | `zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33` |
 | `AUTH0_SETTINGS_CLIENT_SECRET` | Auth0 Regular Web App client secret | (secret, from Auth0 dashboard) |
@@ -130,7 +131,7 @@ The credential store uses a single Redis string per user:
 
 ```
 Key:   mapp_creds:{auth0_sub}
-Value: base64(AES-256-GCM(JSON({ clientId, clientSecret, baseUrl })))
+Value: base64(AES-256-GCM(JSON({ clientId, clientSecret })))
 ```
 
 Redis is used as a simple key-value store — no sorted sets, lists, or pub/sub. Any Upstash Redis plan will work; storage requirements are minimal (each record is a few hundred bytes).
@@ -176,7 +177,7 @@ Without this setting, the `/api/mcp` route will fail to compile or throw runtime
 
 All routes use the Node.js serverless runtime. The Edge runtime is explicitly not used because:
 - `mcp-handler` requires Node.js APIs not available in the Edge runtime
-- The Web Crypto API usage in `lib/crypto.ts` (`crypto.subtle`) is available in Node 20 and works correctly in Vercel serverless
+- The Web Crypto API usage in `lib/crypto.ts` (`crypto.subtle`) is available in Node 24 and works correctly in Vercel serverless
 - `@upstash/redis` works in both runtimes, but keeping everything on Node.js simplifies the setup
 
 ### Function Duration
@@ -218,6 +219,7 @@ npx vercel link
 # Option A: Via CLI (prompts for value)
 npx vercel env add AUTH0_DOMAIN production
 npx vercel env add AUTH0_AUDIENCE production
+npx vercel env add MAPP_API_BASE_URL production
 npx vercel env add AUTH0_ACTION_SECRET production
 npx vercel env add AUTH0_SETTINGS_CLIENT_ID production
 npx vercel env add AUTH0_SETTINGS_CLIENT_SECRET production
@@ -283,15 +285,11 @@ Expected response (HTTP 200):
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-02-26T15:00:00.000Z",
-  "auth0Domain": "configured",
-  "auth0Audience": "configured",
-  "encryptionKey": "configured",
-  "redisUrl": "configured"
+  "timestamp": "2026-02-26T15:00:00.000Z"
 }
 ```
 
-HTTP 503 indicates one or more environment variables are missing. The response body identifies which ones.
+HTTP 503 indicates one or more environment variables are missing. Missing keys are logged server-side.
 
 ### 2. OAuth Metadata
 
@@ -332,7 +330,7 @@ All runtime logs are available in the Vercel dashboard under **Project → Logs*
 
 ### Health Endpoint
 
-The `/api/health` endpoint is suitable for uptime monitors (e.g. Vercel Monitoring, Datadog, UptimeRobot). It checks only configuration presence, not live connectivity to Auth0 or Redis.
+The `/api/health` endpoint is suitable for uptime monitors (e.g. Vercel Monitoring, Datadog, UptimeRobot). It checks configuration presence and returns only `status` and `timestamp`; missing keys are logged server-side.
 
 ### Key Metrics to Watch
 

@@ -10,6 +10,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth0Token } from "@/lib/auth";
 import {
+  getMappApiBaseUrl,
+  validateSubmittedBaseUrl,
+} from "@/lib/mapp-base-url";
+import {
   saveCredentials,
   loadCredentials,
   deleteCredentials,
@@ -55,7 +59,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         configured: true,
         clientId: creds ? maskString(creds.clientId) : "****",
-        baseUrl: creds?.baseUrl || "https://intelligence.eu.mapp.com",
+        baseUrl: creds?.baseUrl || getMappApiBaseUrl(),
       });
     }
 
@@ -105,11 +109,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const baseUrlError = validateSubmittedBaseUrl(body.baseUrl);
+  if (baseUrlError) {
+    return NextResponse.json({ error: baseUrlError }, { status: 400 });
+  }
+
   try {
     await saveCredentials(auth.sub, {
       clientId: body.clientId,
       clientSecret: body.clientSecret,
-      baseUrl: body.baseUrl || "https://intelligence.eu.mapp.com",
     });
   } catch (err) {
     console.error("Failed to save credentials:", err);

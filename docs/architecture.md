@@ -56,8 +56,11 @@ MCP Client (Claude, Cursor, etc.)
 │  /api/settings       → CRUD creds   │
 │    └─ Auth0 JWT (RS256) auth         │
 │                                      │
+│  /api/auth/login     → OAuth init    │
+│    └─ state + PKCE cookie setup      │
+│                                      │
 │  /api/auth/callback  → OAuth code   │
-│    └─ Code → token exchange          │
+│    └─ state+PKCE validation + token  │
 │                                      │
 │  /api/health         → Health check  │
 │  /.well-known/...    → OAuth meta    │
@@ -298,7 +301,6 @@ Where `sub` is the Auth0 subject claim (e.g. `auth0|64abc123def456`). This guara
 interface StoredCredentials {
   clientId: string;
   clientSecret: string;
-  baseUrl: string;
 }
 ```
 
@@ -311,7 +313,7 @@ interface StoredCredentials {
 | `deleteCredentials(sub)` | `DEL mapp_creds:{sub}` | Used by DELETE /api/settings |
 | `hasCredentials(sub)` | `EXISTS mapp_creds:{sub}` | Avoids decrypt overhead for status checks |
 
-Default `baseUrl` on load: `https://intelligence.eu.mapp.com` (applied if the stored value is empty).
+The downstream Mapp API base URL is fixed server-side to `https://intelligence.eu.mapp.com` via `MAPP_API_BASE_URL`.
 
 ---
 
@@ -329,13 +331,15 @@ export interface MappCredentials {
 }
 ```
 
+`baseUrl` remains in the in-memory type for compatibility, but outbound requests are pinned to `MAPP_API_BASE_URL` (`https://intelligence.eu.mapp.com`).
+
 **Token cache:**
 
 ```typescript
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 ```
 
-Keyed by `clientId`. Tokens are cached in-memory within a function instance lifetime. The cache is checked on every API call, refreshing 60 seconds before expiry:
+Keyed by a hash of `(clientId, clientSecret, baseUrl)`. Tokens are cached in-memory within a function instance lifetime. The cache is checked on every API call, refreshing 60 seconds before expiry:
 
 ```typescript
 if (cached && Date.now() < cached.expiresAt - 60_000) {
@@ -348,7 +352,7 @@ if (cached && Date.now() < cached.expiresAt - 60_000) {
 **Token acquisition (client_credentials flow):**
 
 ```
-POST {baseUrl}/analytics/api/oauth/token
+POST {MAPP_API_BASE_URL}/analytics/api/oauth/token
   ?grant_type=client_credentials
   &scope=mapp.intelligence-api
 Authorization: Basic base64({clientId}:{clientSecret})
@@ -361,7 +365,7 @@ Authorization: Basic base64({clientId}:{clientSecret})
 | `apiGet(creds, path, params?)` | GET | Appends query params from object |
 | `apiPost(creds, path, body)` | POST | JSON body, `Content-Type: application/json` |
 | `apiDelete(creds, path)` | DELETE | Returns `{ success: true, status }` |
-| `apiGetAbsolute(creds, absoluteUrl)` | GET | Used for polling `resultUrl` / `statusUrl` (full URLs) |
+| `apiGetAbsolute(creds, absoluteUrl)` | GET | Used for polling `resultUrl` / `statusUrl` (full URLs), origin-validated against `MAPP_API_BASE_URL` |
 
 All helpers throw on non-2xx responses with the HTTP status code and body text included in the error message.
 
@@ -460,7 +464,7 @@ The following describes the complete path for a single MCP tool call:
       - loadCredentials(sub)
       - Redis GET mapp_creds:{sub}
       - AES-256-GCM decrypt
-      - Returns { clientId, clientSecret, baseUrl }
+      - Returns { clientId, clientSecret }
 
  7. Mapp API call
       - getToken(creds) — client_credentials OAuth flow (cached)
@@ -494,7 +498,7 @@ Each user's Mapp credentials are stored under `mapp_creds:{sub}` where `sub` is 
 
 ### Encryption at rest
 
-All Mapp credentials (clientId, clientSecret, baseUrl) are encrypted with AES-256-GCM before being written to Redis. The GCM authentication tag prevents undetected tampering. The encryption key is never stored in Redis; it lives only in the Vercel environment.
+All Mapp credentials (clientId, clientSecret) are encrypted with AES-256-GCM before being written to Redis. The GCM authentication tag prevents undetected tampering. The encryption key is never stored in Redis; it lives only in the Vercel environment.
 
 ### JWT verification on every request
 
@@ -503,6 +507,10 @@ Every request to `/api/mcp` and `/api/settings` verifies the Auth0 JWT signature
 ### Fragment-based token delivery
 
 The settings page OAuth flow delivers the access token in the URL fragment (`/settings#access_token=...`). Fragment identifiers are never sent to the server in HTTP requests, so the token does not appear in server access logs. The JavaScript reads it from `window.location.hash` and immediately clears the fragment.
+
+### OAuth request integrity
+
+The settings OAuth flow is initiated by `/api/auth/login`, which creates a cryptographically random `state` value and PKCE verifier/challenge pair. `state` and PKCE verifier are stored in short-lived HttpOnly cookies and validated in `/api/auth/callback` before token exchange. This blocks callback CSRF and authorization-code injection.
 
 ### Domain restriction
 

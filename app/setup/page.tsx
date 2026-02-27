@@ -14,7 +14,6 @@ function SetupForm() {
   const [formState, setFormState] = useState<FormState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [baseUrl, setBaseUrl] = useState("https://intelligence.eu.mapp.com");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
 
@@ -42,7 +41,6 @@ function SetupForm() {
           session_token: sessionToken,
           clientId,
           clientSecret,
-          baseUrl,
         }),
       });
 
@@ -91,24 +89,6 @@ function SetupForm() {
 
       {(formState === "form" || formState === "saving") && (
         <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.field}>
-            <label htmlFor="baseUrl" style={styles.label}>
-              Base URL
-            </label>
-            <input
-              id="baseUrl"
-              type="url"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://intelligence.eu.mapp.com"
-              required
-              style={styles.input}
-            />
-            <span style={styles.hint}>
-              The Mapp Intelligence API endpoint for your region
-            </span>
-          </div>
-
           <div style={styles.field}>
             <label htmlFor="clientId" style={styles.label}>
               Client ID
@@ -175,7 +155,9 @@ export default function SetupPage() {
           <h1 style={styles.title}>Connect Mapp Intelligence</h1>
           <p style={styles.subtitle}>
             Enter your Mapp Intelligence API credentials to start using the MCP
-            tools. Your credentials are encrypted and stored securely.
+            tools. The API endpoint is fixed to{" "}
+            <code>https://intelligence.eu.mapp.com</code>. Your credentials are
+            encrypted and stored securely.
           </p>
         </div>
 

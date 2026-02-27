@@ -69,7 +69,7 @@ This application is used exclusively by the `/settings` page to provide a conven
 | Type | Regular Web Application |
 | OIDC Conformant | Yes |
 | Allowed Callback URLs | `https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback` |
-| Grant types | Authorization Code |
+| Grant types | Authorization Code only |
 
 The settings page needs a stable `client_id` and server-side `client_secret` to perform the authorization code exchange at `/api/auth/callback`. Unlike dynamic MCP clients, this is a first-party application with a known callback URL.
 
@@ -97,7 +97,7 @@ The `domain_aliases` setting restricts sign-up to `@mapp.com` email addresses at
 |---|---|
 | Action ID | `3251f9d0-f7b1-4b2c-91e8-99ddf640918f` |
 | Trigger | Login flow (post-login) |
-| Runtime | Node 18 |
+| Runtime | Node 22 |
 
 This action fires after every successful Auth0 login. It has two responsibilities:
 
@@ -226,37 +226,42 @@ This flow is used when an existing user wants to update or delete their stored M
 ```
  1. User visits /settings
 
- 2. /settings page detects no token → initiates login
-      Redirect to Auth0:
+ 2. /settings page detects no token → redirects to /api/auth/login
+
+ 3. /api/auth/login generates OAuth state + PKCE verifier/challenge,
+    sets short-lived HttpOnly cookies, and redirects to Auth0:
         GET https://mapp-product.eu.auth0.com/authorize
           ?client_id=zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33
           &response_type=code
           &redirect_uri=https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback
           &scope=openid profile email
           &audience=https://mapp-intelligence-mcp.vercel.app/api/mcp
+          &code_challenge=<S256 challenge>
+          &code_challenge_method=S256
           &state=<random>
 
- 3. User logs in (Post-Login Action runs, but user already has credentials configured
+ 4. User logs in (Post-Login Action runs, but user already has credentials configured
     so no redirect to /setup occurs)
 
- 4. Auth0 → GET /api/auth/callback?code=<code>&state=<state>
+ 5. Auth0 → GET /api/auth/callback?code=<code>&state=<state>
 
- 5. /api/auth/callback exchanges code for token:
+ 6. /api/auth/callback validates state + PKCE cookies, then exchanges code:
       POST https://mapp-product.eu.auth0.com/oauth/token
         grant_type=authorization_code
         client_id=zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33
         client_secret=<AUTH0_SETTINGS_CLIENT_SECRET>
         code=<code>
+        code_verifier=<pkce_verifier_from_cookie>
         redirect_uri=https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback
         audience=https://mapp-intelligence-mcp.vercel.app/api/mcp
 
- 6. /api/auth/callback redirects to:
+ 7. /api/auth/callback redirects to:
       /settings#access_token=<access_token>
       (token is in fragment, never sent to server in subsequent requests)
 
- 7. /settings page reads token from window.location.hash, clears fragment
+ 8. /settings page reads token from window.location.hash, clears fragment
 
- 8. /settings page calls /api/settings with:
+ 9. /settings page calls /api/settings with:
       Authorization: Bearer <access_token>
       - GET  /api/settings        → check current credential status
       - POST /api/settings        → save new credentials

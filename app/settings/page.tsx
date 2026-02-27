@@ -12,10 +12,6 @@ interface CredentialInfo {
 }
 
 export default function SettingsPage() {
-  const domain = process.env.NEXT_PUBLIC_AUTH0_DOMAIN || "";
-  const settingsClientId = process.env.NEXT_PUBLIC_AUTH0_SETTINGS_CLIENT_ID || "";
-  const audience = process.env.NEXT_PUBLIC_AUTH0_AUDIENCE || "";
-
   const [pageState, setPageState] = useState<PageState>("loading");
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -24,7 +20,6 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const [credentialInfo, setCredentialInfo] = useState<CredentialInfo | null>(null);
-  const [baseUrl, setBaseUrl] = useState("https://intelligence.eu.mapp.com");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
 
@@ -62,9 +57,6 @@ export default function SettingsPage() {
       if (res.ok) {
         const data = await res.json();
         setCredentialInfo(data);
-        if (data.configured && data.baseUrl) {
-          setBaseUrl(data.baseUrl);
-        }
       } else if (res.status === 401) {
         setPageState("unauthenticated");
         setAccessToken(null);
@@ -81,15 +73,7 @@ export default function SettingsPage() {
   }, [pageState, fetchCredentials]);
 
   function redirectToLogin() {
-    const callbackUrl = `${window.location.origin}/api/auth/callback`;
-    const authUrl =
-      `https://${domain}/authorize?` +
-      `response_type=code&` +
-      `client_id=${settingsClientId}&` +
-      `redirect_uri=${encodeURIComponent(callbackUrl)}&` +
-      `audience=${encodeURIComponent(audience)}&` +
-      `scope=openid+profile+email`;
-    window.location.href = authUrl;
+    window.location.href = "/api/auth/login";
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -104,7 +88,7 @@ export default function SettingsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ clientId, clientSecret, baseUrl }),
+        body: JSON.stringify({ clientId, clientSecret }),
       });
 
       const text = await res.text();
@@ -251,21 +235,6 @@ export default function SettingsPage() {
                   ? "Update Credentials"
                   : "Add Credentials"}
               </h2>
-
-              <div style={styles.field}>
-                <label htmlFor="baseUrl" style={styles.label}>
-                  Base URL
-                </label>
-                <input
-                  id="baseUrl"
-                  type="url"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://intelligence.eu.mapp.com"
-                  required
-                  style={styles.input}
-                />
-              </div>
 
               <div style={styles.field}>
                 <label htmlFor="clientId" style={styles.label}>

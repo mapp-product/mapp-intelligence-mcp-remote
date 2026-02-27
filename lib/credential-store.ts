@@ -8,6 +8,7 @@
 import { Redis } from "@upstash/redis";
 import { encrypt, decrypt } from "./crypto";
 import type { MappCredentials } from "./mapp-api";
+import { getMappApiBaseUrl } from "./mapp-base-url";
 
 const KEY_PREFIX = "mapp_creds:";
 
@@ -23,7 +24,7 @@ function getRedis(): Redis {
 export interface StoredCredentials {
   clientId: string;
   clientSecret: string;
-  baseUrl: string;
+  baseUrl?: string;
 }
 
 export async function saveCredentials(
@@ -31,7 +32,10 @@ export async function saveCredentials(
   creds: StoredCredentials
 ): Promise<void> {
   const redis = getRedis();
-  const payload = JSON.stringify(creds);
+  const payload = JSON.stringify({
+    clientId: creds.clientId,
+    clientSecret: creds.clientSecret,
+  });
   const encrypted = await encrypt(payload);
   await redis.set(`${KEY_PREFIX}${sub}`, encrypted);
 }
@@ -46,10 +50,19 @@ export async function loadCredentials(
   try {
     const json = await decrypt(encrypted);
     const parsed = JSON.parse(json) as StoredCredentials;
+    if (
+      typeof parsed.clientId !== "string" ||
+      typeof parsed.clientSecret !== "string"
+    ) {
+      return null;
+    }
+
     return {
       clientId: parsed.clientId,
       clientSecret: parsed.clientSecret,
-      baseUrl: parsed.baseUrl || "https://intelligence.eu.mapp.com",
+      // Keep baseUrl in memory for compatibility with existing response shapes.
+      // Runtime API calls ignore user-provided origins and use configured base URL.
+      baseUrl: getMappApiBaseUrl(),
     };
   } catch {
     return null;

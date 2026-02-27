@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "audit:prod": "npm audit --omit=dev"
   },
   "dependencies": {
     "@upstash/redis": "^1.36.2",
@@ -21,6 +22,9 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "@modelcontextprotocol/sdk": "^1.27.1"
   },
   "keywords": [
     "mcp",

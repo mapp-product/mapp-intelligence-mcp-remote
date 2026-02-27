@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as jose from "jose";
 import { saveCredentials } from "@/lib/credential-store";
+import { validateSubmittedBaseUrl } from "@/lib/mapp-base-url";
 
 /**
  * POST /api/setup — Save credentials during Auth0 redirect onboarding.
@@ -58,6 +59,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const baseUrlError = validateSubmittedBaseUrl(body.baseUrl);
+  if (baseUrlError) {
+    return NextResponse.json({ error: baseUrlError }, { status: 400 });
+  }
+
   // Verify the session token signed by the Auth0 Action
   let payload: jose.JWTPayload;
   try {
@@ -86,7 +92,6 @@ export async function POST(req: NextRequest) {
   await saveCredentials(sub, {
     clientId: body.clientId,
     clientSecret: body.clientSecret,
-    baseUrl: body.baseUrl || "https://intelligence.eu.mapp.com",
   });
 
   return NextResponse.json({

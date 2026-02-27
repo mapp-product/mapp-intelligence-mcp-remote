@@ -13,6 +13,7 @@ This document describes every HTTP endpoint exposed by the Mapp Intelligence MCP
    - [POST `/api/settings`](#post-apisettings) — Save credentials
    - [DELETE `/api/settings`](#delete-apisettings) — Remove credentials
    - [POST `/api/setup`](#post-apisetup) — Onboarding credential save
+   - [GET `/api/auth/login`](#get-apiauthlogin) — OAuth login init (`state` + PKCE)
    - [GET `/api/auth/callback`](#get-apiauthcallback) — OAuth code callback
    - [GET `/api/health`](#get-apihealth) — Health check
    - [GET `/.well-known/oauth-protected-resource`](#get-well-knownoauth-protected-resource) — OAuth metadata
@@ -163,8 +164,7 @@ Saves (or overwrites) the Mapp Intelligence API credentials for the authenticate
 ```json
 {
   "clientId": "string",
-  "clientSecret": "string",
-  "baseUrl": "string (optional)"
+  "clientSecret": "string"
 }
 ```
 
@@ -172,7 +172,7 @@ Saves (or overwrites) the Mapp Intelligence API credentials for the authenticate
 |---|---|---|---|---|
 | `clientId` | string | Yes | — | Mapp Intelligence API client ID |
 | `clientSecret` | string | Yes | — | Mapp Intelligence API client secret |
-| `baseUrl` | string | No | `https://intelligence.eu.mapp.com` | Mapp API base URL; use if on a non-EU instance |
+| `baseUrl` | string | No | — | Optional legacy field; if present, it must equal `https://intelligence.eu.mapp.com` |
 
 #### Response
 
@@ -275,8 +275,7 @@ The session token is **not** passed in the `Authorization` header — it is part
 {
   "session_token": "string",
   "clientId": "string",
-  "clientSecret": "string",
-  "baseUrl": "string (optional)"
+  "clientSecret": "string"
 }
 ```
 
@@ -285,7 +284,7 @@ The session token is **not** passed in the `Authorization` header — it is part
 | `session_token` | string | Yes | — | HS256 JWT issued by Auth0 Post-Login Action |
 | `clientId` | string | Yes | — | Mapp Intelligence API client ID |
 | `clientSecret` | string | Yes | — | Mapp Intelligence API client secret |
-| `baseUrl` | string | No | `https://intelligence.eu.mapp.com` | Mapp API base URL |
+| `baseUrl` | string | No | — | Optional legacy field; if present, it must equal `https://intelligence.eu.mapp.com` |
 
 #### Token Verification
 
@@ -340,6 +339,34 @@ or
 
 ---
 
+### GET `/api/auth/login`
+
+**File:** `app/api/auth/login/route.ts`
+
+Starts the `/settings` OAuth flow and redirects to Auth0 `/authorize`.
+The endpoint generates a random OAuth `state` and PKCE verifier/challenge,
+stores `state` and verifier in short-lived HttpOnly cookies, and includes
+`state` + PKCE challenge in the Auth0 authorize request.
+
+#### Authentication
+
+None.
+
+#### Response
+
+**302 Redirect** to Auth0 `/authorize` with:
+
+- `response_type=code`
+- `client_id=<AUTH0_SETTINGS_CLIENT_ID>`
+- `redirect_uri=<origin>/api/auth/callback`
+- `audience=<AUTH0_AUDIENCE>`
+- `scope=openid profile email`
+- `state=<random>`
+- `code_challenge=<S256 challenge>`
+- `code_challenge_method=S256`
+
+---
+
 ### GET `/api/auth/callback`
 
 **File:** `app/api/auth/callback/route.ts`
@@ -355,9 +382,11 @@ None — this endpoint is called by the browser during the OAuth redirect.
 | Parameter | Required | Notes |
 |---|---|---|
 | `code` | Yes (unless `error` present) | Authorization code from Auth0 |
-| `state` | No | OAuth state parameter for CSRF protection (passed through) |
+| `state` | Yes | Must match the state cookie set by `/api/auth/login` |
 | `error` | No | Auth0 error code (e.g. `access_denied`) |
 | `error_description` | No | Human-readable error description |
+
+The callback also requires the PKCE verifier cookie set by `/api/auth/login`.
 
 #### Token Exchange
 
@@ -373,7 +402,8 @@ Content-Type: application/json
   "client_secret": "<AUTH0_SETTINGS_CLIENT_SECRET>",
   "code": "<code>",
   "redirect_uri": "https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback",
-  "audience": "<AUTH0_AUDIENCE>"
+  "audience": "<AUTH0_AUDIENCE>",
+  "code_verifier": "<pkce_verifier_from_cookie>"
 }
 ```
 
@@ -389,12 +419,6 @@ This endpoint always responds with an HTTP redirect, never a JSON body.
 **Error (from Auth0 or token exchange failure) — redirects to:**
 ```
 /settings#error=<url_encoded_error_message>
-```
-
-**400 Bad Request** (no `code` and no `error` parameter):
-
-```json
-{ "error": "Missing authorization code" }
 ```
 
 **500 Internal Server Error** (missing server configuration):
@@ -429,11 +453,7 @@ None.
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-02-26T15:00:00.000Z",
-  "auth0Domain": "configured",
-  "auth0Audience": "configured",
-  "encryptionKey": "configured",
-  "redisUrl": "configured"
+  "timestamp": "2026-02-26T15:00:00.000Z"
 }
 ```
 
@@ -441,25 +461,11 @@ None.
 
 ```json
 {
-  "status": "ok",
-  "timestamp": "2026-02-26T15:00:00.000Z",
-  "auth0Domain": "configured",
-  "auth0Audience": "configured",
-  "encryptionKey": "missing",
-  "redisUrl": "configured"
+  "status": "degraded",
+  "timestamp": "2026-02-26T15:00:00.000Z"
 }
 ```
-
-#### Checked Variables
-
-| Field | Checks |
-|---|---|
-| `auth0Domain` | `AUTH0_DOMAIN` |
-| `auth0Audience` | `AUTH0_AUDIENCE` |
-| `encryptionKey` | `CREDENTIAL_ENCRYPTION_KEY` |
-| `redisUrl` | `KV_REST_API_URL` or `UPSTASH_REDIS_REST_URL` |
-
-> **Note:** This endpoint checks configuration presence only, not actual connectivity to Auth0 or Redis. A 200 response does not guarantee the downstream services are reachable.
+> **Note:** This endpoint intentionally returns minimal details. Missing config keys are logged server-side, not exposed in the response body.
 
 ---
 

@@ -1,16 +1,41 @@
 /**
  * Auth callback API — handles OAuth code exchange for the /settings page.
  *
- * When a user visits /settings, they are redirected to Auth0 to log in.
- * Auth0 redirects back to /api/auth/callback with an authorization code.
- * This endpoint exchanges the code for an access token and redirects
- * the user to /settings with the token in a fragment (hash).
+ * The companion /api/auth/login route sets short-lived state and PKCE
+ * verifier cookies. This callback validates those values before exchanging
+ * the code for an access token, then redirects to /settings with the token
+ * in a URL fragment.
  *
- * Using fragment (hash) rather than query params ensures the token
- * is not sent to the server on subsequent requests.
+ * Using fragment (hash) rather than query params keeps the token out of
+ * server logs on subsequent page requests.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import {
+  SETTINGS_OAUTH_PKCE_COOKIE,
+  SETTINGS_OAUTH_STATE_COOKIE,
+} from "@/lib/settings-oauth";
+
+const CALLBACK_PATH = "/api/auth/callback";
+
+function clearOauthCookies(response: NextResponse): void {
+  response.cookies.set(SETTINGS_OAUTH_STATE_COOKIE, "", {
+    path: CALLBACK_PATH,
+    maxAge: 0,
+  });
+  response.cookies.set(SETTINGS_OAUTH_PKCE_COOKIE, "", {
+    path: CALLBACK_PATH,
+    maxAge: 0,
+  });
+}
+
+function redirectWithError(req: NextRequest, message: string): NextResponse {
+  const redirectUrl = new URL("/settings", req.nextUrl.origin);
+  redirectUrl.hash = `error=${encodeURIComponent(message)}`;
+  const response = NextResponse.redirect(redirectUrl);
+  clearOauthCookies(response);
+  return response;
+}
 
 export async function GET(req: NextRequest) {
   const domain = process.env.AUTH0_DOMAIN;
@@ -26,21 +51,27 @@ export async function GET(req: NextRequest) {
   }
 
   const code = req.nextUrl.searchParams.get("code");
-  const state = req.nextUrl.searchParams.get("state");
+  const callbackState = req.nextUrl.searchParams.get("state");
   const error = req.nextUrl.searchParams.get("error");
+  const expectedState = req.cookies.get(SETTINGS_OAUTH_STATE_COOKIE)?.value;
+  const codeVerifier = req.cookies.get(SETTINGS_OAUTH_PKCE_COOKIE)?.value;
 
   if (error) {
-    const errorDescription = req.nextUrl.searchParams.get("error_description") || "Login failed";
-    const redirectUrl = new URL("/settings", req.nextUrl.origin);
-    redirectUrl.hash = `error=${encodeURIComponent(errorDescription)}`;
-    return NextResponse.redirect(redirectUrl);
+    const errorDescription =
+      req.nextUrl.searchParams.get("error_description") || "Login failed";
+    return redirectWithError(req, errorDescription);
   }
 
   if (!code) {
-    return NextResponse.json(
-      { error: "Missing authorization code" },
-      { status: 400 }
-    );
+    return redirectWithError(req, "Missing authorization code");
+  }
+
+  if (!callbackState || !expectedState || callbackState !== expectedState) {
+    return redirectWithError(req, "Invalid authentication state");
+  }
+
+  if (!codeVerifier) {
+    return redirectWithError(req, "Missing PKCE verifier");
   }
 
   // Exchange authorization code for tokens
@@ -58,15 +89,14 @@ export async function GET(req: NextRequest) {
         code,
         redirect_uri: callbackUrl,
         audience,
+        code_verifier: codeVerifier,
       }),
     });
 
     if (!tokenRes.ok) {
       const err = await tokenRes.text();
       console.error("Token exchange failed:", err);
-      const redirectUrl = new URL("/settings", req.nextUrl.origin);
-      redirectUrl.hash = "error=Token+exchange+failed";
-      return NextResponse.redirect(redirectUrl);
+      return redirectWithError(req, "Token exchange failed");
     }
 
     const tokens = await tokenRes.json();
@@ -75,11 +105,11 @@ export async function GET(req: NextRequest) {
     // Redirect to settings page with the token in the fragment
     const redirectUrl = new URL("/settings", req.nextUrl.origin);
     redirectUrl.hash = `access_token=${accessToken}`;
-    return NextResponse.redirect(redirectUrl);
+    const response = NextResponse.redirect(redirectUrl);
+    clearOauthCookies(response);
+    return response;
   } catch (err) {
     console.error("Auth callback error:", err);
-    const redirectUrl = new URL("/settings", req.nextUrl.origin);
-    redirectUrl.hash = "error=Authentication+failed";
-    return NextResponse.redirect(redirectUrl);
+    return redirectWithError(req, "Authentication failed");
   }
 }

@@ -9,6 +9,7 @@ This is the remote/hosted version of [mapp-intelligence-mcp](https://github.com/
 - **13 MCP tools** covering analysis queries, reports, segments, dimensions/metrics discovery, time filters, and usage tracking
 - **Auth0 OAuth 2.0** — users authenticate via Auth0 Universal Login (username/password signup)
 - **Per-user Mapp credentials** — each user stores their own `client_id` / `client_secret` via the settings API
+- **Fixed downstream endpoint** — all requests are pinned to `https://intelligence.eu.mapp.com`
 - **Encrypted at-rest storage** — credentials encrypted with AES-256-GCM, stored in Vercel KV
 - **Request-scoped credential resolution** — each MCP tool call uses the authenticated user's own Mapp API credentials
 - **Streamable HTTP transport** — efficient stateless transport (no persistent connections)
@@ -74,8 +75,7 @@ curl -X POST https://<your-deployment>.vercel.app/api/settings \
   -H "Content-Type: application/json" \
   -d '{
     "clientId": "YOUR_MAPP_CLIENT_ID",
-    "clientSecret": "YOUR_MAPP_CLIENT_SECRET",
-    "baseUrl": "https://intelligence.eu.mapp.com"
+    "clientSecret": "YOUR_MAPP_CLIENT_SECRET"
   }'
 ```
 
@@ -104,6 +104,7 @@ Now all 13 Mapp Intelligence tools are available through your MCP client:
 |----------|-------------|
 | `AUTH0_DOMAIN` | Auth0 tenant domain (e.g. `your-tenant.us.auth0.com`) |
 | `AUTH0_AUDIENCE` | Auth0 API identifier / audience |
+| `MAPP_API_BASE_URL` | Must be `https://intelligence.eu.mapp.com` |
 | `CREDENTIAL_ENCRYPTION_KEY` | 64-char hex string for AES-256-GCM |
 | `KV_REST_API_URL` | Auto-set by Vercel/Upstash Redis integration |
 | `KV_REST_API_TOKEN` | Auto-set by Vercel/Upstash Redis integration |
@@ -132,6 +133,8 @@ vercel deploy --prod
 | `/api/settings` | GET | Bearer | Check credential status |
 | `/api/settings` | POST | Bearer | Save Mapp credentials |
 | `/api/settings` | DELETE | Bearer | Remove credentials |
+| `/api/auth/login` | GET | None | Start settings OAuth (`state` + PKCE) |
+| `/api/auth/callback` | GET | None | OAuth callback for settings login |
 | `/api/health` | GET | None | Health/readiness check |
 | `/.well-known/oauth-protected-resource` | GET | None | OAuth metadata |
 
@@ -139,6 +142,7 @@ vercel deploy --prod
 
 - All Mapp credentials encrypted at rest with AES-256-GCM
 - Auth0 JWT tokens verified on every request using JWKS
+- Settings OAuth flow hardened with `state` + PKCE
 - No secrets in source code or git
 - Environment variables for all sensitive configuration
 - Per-user isolation — users can only access their own credentials

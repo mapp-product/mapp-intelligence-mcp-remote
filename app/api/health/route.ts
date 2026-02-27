@@ -5,20 +5,29 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const checks: Record<string, string> = {
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    auth0Domain: process.env.AUTH0_DOMAIN ? "configured" : "missing",
-    auth0Audience: process.env.AUTH0_AUDIENCE ? "configured" : "missing",
-    encryptionKey: process.env.CREDENTIAL_ENCRYPTION_KEY ? "configured" : "missing",
-    redisUrl: (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) ? "configured" : "missing",
-  };
+  const missing: string[] = [];
+  if (!process.env.AUTH0_DOMAIN) missing.push("AUTH0_DOMAIN");
+  if (!process.env.AUTH0_AUDIENCE) missing.push("AUTH0_AUDIENCE");
+  if (!process.env.CREDENTIAL_ENCRYPTION_KEY) {
+    missing.push("CREDENTIAL_ENCRYPTION_KEY");
+  }
+  if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)) {
+    missing.push("KV_REST_API_URL");
+  }
+  if (!(process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)) {
+    missing.push("KV_REST_API_TOKEN");
+  }
 
-  const allConfigured = Object.values(checks).every(
-    (v) => v !== "missing"
+  const status = missing.length === 0 ? "ok" : "degraded";
+  if (missing.length > 0) {
+    console.error("Health check missing required configuration:", missing);
+  }
+
+  return NextResponse.json(
+    {
+      status,
+      timestamp: new Date().toISOString(),
+    },
+    { status: missing.length === 0 ? 200 : 503 }
   );
-
-  return NextResponse.json(checks, {
-    status: allConfigured ? 200 : 503,
-  });
 }

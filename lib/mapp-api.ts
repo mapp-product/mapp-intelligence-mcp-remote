@@ -6,14 +6,17 @@
  * enabling multi-tenant usage with per-user Mapp accounts.
  */
 
+import { createHash } from "node:crypto";
+import { assertTrustedMappAbsoluteUrl, getMappApiBaseUrl } from "./mapp-base-url";
+
+const TOKEN_REFRESH_SAFETY_MS = 60_000;
+const MAX_TOKEN_CACHE_ENTRIES = 500;
+
 // ---------------------------------------------------------------------------
-// Token cache — keyed by clientId to support multiple users concurrently
+// Token cache — keyed by credentials tuple hash for tenant-safe reuse
 // ---------------------------------------------------------------------------
 
-const tokenCache = new Map<
-  string,
-  { token: string; expiresAt: number }
->();
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
 export interface MappCredentials {
   clientId: string;
@@ -21,13 +24,44 @@ export interface MappCredentials {
   baseUrl: string;
 }
 
+function getTokenCacheKey(creds: MappCredentials): string {
+  return createHash("sha256")
+    .update(`${creds.clientId}\n${creds.clientSecret}\n${getMappApiBaseUrl()}`)
+    .digest("hex");
+}
+
+function pruneExpiredTokenCache(now = Date.now()): void {
+  for (const [key, entry] of tokenCache.entries()) {
+    if (now >= entry.expiresAt) {
+      tokenCache.delete(key);
+    }
+  }
+}
+
+function enforceTokenCacheLimit(): void {
+  if (tokenCache.size <= MAX_TOKEN_CACHE_ENTRIES) return;
+
+  const sortedByExpiry = [...tokenCache.entries()].sort(
+    (a, b) => a[1].expiresAt - b[1].expiresAt
+  );
+  const removeCount = tokenCache.size - MAX_TOKEN_CACHE_ENTRIES;
+  for (let i = 0; i < removeCount; i++) {
+    tokenCache.delete(sortedByExpiry[i][0]);
+  }
+}
+
 async function getToken(creds: MappCredentials): Promise<string> {
-  const cached = tokenCache.get(creds.clientId);
-  if (cached && Date.now() < cached.expiresAt - 60_000) {
+  const now = Date.now();
+  pruneExpiredTokenCache(now);
+
+  const cacheKey = getTokenCacheKey(creds);
+  const cached = tokenCache.get(cacheKey);
+  if (cached && now < cached.expiresAt - TOKEN_REFRESH_SAFETY_MS) {
     return cached.token;
   }
 
-  const url = new URL("/analytics/api/oauth/token", creds.baseUrl);
+  const baseUrl = getMappApiBaseUrl();
+  const url = new URL("/analytics/api/oauth/token", baseUrl);
   url.searchParams.set("grant_type", "client_credentials");
   url.searchParams.set("scope", "mapp.intelligence-api");
 
@@ -48,10 +82,15 @@ async function getToken(creds: MappCredentials): Promise<string> {
   }
 
   const data = await res.json();
-  tokenCache.set(creds.clientId, {
+  const expiresInSeconds =
+    typeof data.expires_in === "number" ? data.expires_in : 3600;
+
+  tokenCache.set(cacheKey, {
     token: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
+    expiresAt: now + expiresInSeconds * 1000,
   });
+  enforceTokenCacheLimit();
+
   return data.access_token;
 }
 
@@ -65,7 +104,7 @@ export async function apiGet(
   params: Record<string, string | number | undefined | null> = {}
 ) {
   const token = await getToken(creds);
-  const url = new URL(path, creds.baseUrl);
+  const url = new URL(path, getMappApiBaseUrl());
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
@@ -91,7 +130,7 @@ export async function apiPost(
   body: unknown
 ) {
   const token = await getToken(creds);
-  const url = new URL(path, creds.baseUrl);
+  const url = new URL(path, getMappApiBaseUrl());
   const res = await fetch(url.toString(), {
     method: "POST",
     headers: {
@@ -112,7 +151,7 @@ export async function apiPost(
 
 export async function apiDelete(creds: MappCredentials, path: string) {
   const token = await getToken(creds);
-  const url = new URL(path, creds.baseUrl);
+  const url = new URL(path, getMappApiBaseUrl());
   const res = await fetch(url.toString(), {
     method: "DELETE",
     headers: {
@@ -132,6 +171,8 @@ export async function apiGetAbsolute(
   creds: MappCredentials,
   absoluteUrl: string
 ) {
+  assertTrustedMappAbsoluteUrl(absoluteUrl);
+
   const token = await getToken(creds);
   const res = await fetch(absoluteUrl, {
     headers: {
@@ -157,6 +198,8 @@ export async function pollForResult(
   maxAttempts = 30,
   intervalMs = 2000
 ) {
+  assertTrustedMappAbsoluteUrl(statusUrl);
+
   for (let i = 0; i < maxAttempts; i++) {
     const status = await apiGetAbsolute(creds, statusUrl);
 
@@ -174,3 +217,4 @@ export async function pollForResult(
     `Query did not complete after ${maxAttempts} polling attempts`
   );
 }
+
