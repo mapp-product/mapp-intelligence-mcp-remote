@@ -316,6 +316,14 @@ curl -X POST https://mapp-intelligence-mcp-remote.vercel.app/api/mcp \
 # Response: HTTP 401 Unauthorized
 ```
 
+```bash
+# ChatGPT-focused endpoint (also should return 401 without token)
+curl -X POST https://mapp-intelligence-mcp-remote.vercel.app/api/mcp-chatgpt \
+  -H "Content-Type: application/json"
+
+# Response: HTTP 401 Unauthorized
+```
+
 ### 4. Settings Page
 
 Visit `https://mapp-intelligence-mcp-remote.vercel.app/settings` in a browser. You should be redirected to the Auth0 Universal Login page.

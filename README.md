@@ -7,6 +7,9 @@ This is the remote/hosted version of [mapp-intelligence-mcp](https://github.com/
 ## Features
 
 - **13 MCP tools** covering analysis queries, reports, segments, dimensions/metrics discovery, time filters, and usage tracking
+- **ChatGPT analytics endpoint** (`/api/mcp-chatgpt`) aligned with the same 13 core tools as `/api/mcp`, plus ChatGPT-native structured presentation
+- **Structured tool outputs** using MCP `outputSchema` + `structuredContent` for reliable in-chat rendering
+- **Widget resources** (`ui://widget/analytics.html`, `ui://widget/kpi.html`) for ChatGPT-native visual result cards
 - **Auth0 OAuth 2.0** — users authenticate via Auth0 Universal Login (username/password signup)
 - **Per-user Mapp credentials** — each user stores their own `client_id` / `client_secret` via the settings API
 - **Fixed downstream endpoint** — all requests are pinned to `https://intelligence.eu.mapp.com`
@@ -26,6 +29,7 @@ MCP Client (Claude, Cursor, etc.)
 │  Vercel (Next.js)                 │
 │                                   │
 │  /api/mcp          → MCP handler  │
+│  /api/mcp-chatgpt  → ChatGPT MCP  │
 │    ├─ Auth0 JWT verification      │
 │    ├─ Load user creds from KV     │
 │    └─ Execute Mapp API calls      │
@@ -49,6 +53,9 @@ Add this server to your MCP client configuration:
 **Claude Desktop / Claude.ai Custom Connector:**
 - Name: `Mapp Intelligence`
 - URL: `https://<your-deployment>.vercel.app/api/mcp`
+
+**ChatGPT Connector (Developer Mode):**
+- URL: `https://<your-deployment>.vercel.app/api/mcp-chatgpt`
 
 **Cursor (`.cursor/mcp.json`):**
 ```json
@@ -90,6 +97,14 @@ Now all 13 Mapp Intelligence tools are available through your MCP client:
 | Reports | `run_report`, `create_report_query`, `check_report_status`, `cancel_report_query` |
 | Quota | `get_analysis_usage` |
 
+For ChatGPT-focused analysis flows, connect to `/api/mcp-chatgpt` and use the same 13 tools listed above. The ChatGPT endpoint adds:
+
+- full JSON `content` for non-lossy model reasoning
+- `structuredContent` envelope for in-chat rendering
+- widget metadata using:
+  - `ui://widget/analytics.html`
+  - `ui://widget/kpi.html`
+
 ## Deployment
 
 ### Prerequisites
@@ -130,6 +145,7 @@ vercel deploy --prod
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/mcp` | GET, POST, DELETE | OAuth Bearer | MCP Streamable HTTP endpoint |
+| `/api/mcp-chatgpt` | GET, POST, DELETE | OAuth Bearer | ChatGPT MCP endpoint with shared core tools and structured/widget presentation metadata |
 | `/api/settings` | GET | Bearer | Check credential status |
 | `/api/settings` | POST | Bearer | Save Mapp credentials |
 | `/api/settings` | DELETE | Bearer | Remove credentials |

@@ -9,6 +9,7 @@ This document describes every HTTP endpoint exposed by the Mapp Intelligence MCP
 1. [Authentication Schemes](#authentication-schemes)
 2. [Endpoints](#endpoints)
    - [POST/GET/DELETE `/api/mcp`](#postgetdelete-apimcp) — MCP Streamable HTTP
+   - [POST/GET/DELETE `/api/mcp-chatgpt`](#postgetdelete-apimcp-chatgpt) — ChatGPT-focused MCP endpoint
    - [GET `/api/settings`](#get-apisettings) — Credential status
    - [POST `/api/settings`](#post-apisettings) — Save credentials
    - [DELETE `/api/settings`](#delete-apisettings) — Remove credentials
@@ -90,6 +91,44 @@ MCP protocol responses (JSON-RPC 2.0 format). Tool results are returned as:
 - All 13 Mapp Intelligence tools are served from this endpoint. See [mcp-tools.md](./mcp-tools.md) for tool documentation.
 - The `sub` claim from the bearer token is forwarded to each tool handler as `authInfo.extra.sub`, used to key per-user credential lookup in Redis.
 - Verbose protocol logging is enabled only when `NODE_ENV !== "production"`.
+
+---
+
+### POST/GET/DELETE `/api/mcp-chatgpt`
+
+**File:** `app/api/mcp-chatgpt/route.ts`
+
+ChatGPT-focused MCP endpoint that exposes the same core 13-tool contract as `/api/mcp`, with additional structured outputs and widget metadata.
+
+#### Authentication
+
+| Scheme | Required |
+|---|---|
+| Bearer token (Auth0 JWT) | Yes |
+
+Returns `401 Unauthorized` with `WWW-Authenticate: Bearer` if the token is missing or invalid.
+
+#### Request
+
+Same Streamable HTTP transport as `/api/mcp`.
+
+- **Method:** `POST`, `GET`, `DELETE`
+- **Content-Type:** `application/json`
+- **Max duration:** 120 seconds
+
+#### Notes
+
+- Intended for ChatGPT connectors and in-chat visualization workflows.
+- Uses explicit `outputSchema` + `structuredContent` envelope contracts.
+- Tool inventory is aligned with `/api/mcp`:
+  - Discovery: `list_dimensions_and_metrics`, `list_segments`, `list_dynamic_timefilters`
+  - Usage: `get_analysis_usage`
+  - Analysis: `run_analysis`, `create_analysis_query`, `check_analysis_status`, `get_analysis_result`, `cancel_analysis_query`
+  - Reports: `run_report`, `create_report_query`, `check_report_status`, `cancel_report_query`
+- Registers UI resources:
+  - `ui://widget/analytics.html`
+  - `ui://widget/kpi.html`
+- Tool reference: [chatgpt-tools.md](./chatgpt-tools.md)
 
 ---
 

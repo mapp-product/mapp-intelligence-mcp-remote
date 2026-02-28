@@ -38,6 +38,10 @@ Setting the **default audience** at the tenant level ensures that tokens issued 
 | Identifier / Audience | `https://mapp-intelligence-mcp.vercel.app/api/mcp` |
 | Signing Algorithm | RS256 |
 
+This single audience secures both MCP routes exposed by the app:
+- `/api/mcp` (general remote MCP tools)
+- `/api/mcp-chatgpt` (ChatGPT adapter over the shared 13-tool MCP contract)
+
 The identifier is used as the `aud` claim in issued JWTs. The application verifies this value against the `AUTH0_AUDIENCE` environment variable on every request.
 
 RS256 is used rather than HS256 because RS256 allows the server to verify tokens using the public key fetched from the JWKS endpoint, without requiring the application to hold the signing secret. This enables key rotation at the Auth0 level without application redeployment.
