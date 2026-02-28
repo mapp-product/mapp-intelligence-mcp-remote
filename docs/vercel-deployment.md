@@ -22,9 +22,9 @@ This document covers everything needed to deploy the Mapp Intelligence MCP Remot
 
 | Property | Value |
 |---|---|
-| Project name | `mapp-intelligence-mcp-remote` |
-| Team | `michaels-projects-3449ce57` |
-| Production URL | `https://mapp-intelligence-mcp-remote.vercel.app` |
+| Project name | `<your-vercel-project-name>` |
+| Team | `<your-vercel-team>` |
+| Production URL | `https://<your-deployment-domain>` |
 | Framework | Next.js 15 |
 | Build command | `next build` |
 | Output directory | `.next` (default) |
@@ -65,11 +65,11 @@ All environment variables must be configured in the **Vercel Dashboard → Proje
 
 | Variable | Purpose | Example Value |
 |---|---|---|
-| `AUTH0_DOMAIN` | Auth0 tenant domain (server-side) | `mapp-product.eu.auth0.com` |
-| `AUTH0_AUDIENCE` | Auth0 API identifier / JWT audience (server-side) | `https://mapp-intelligence-mcp.vercel.app/api/mcp` |
+| `AUTH0_DOMAIN` | Auth0 tenant domain (server-side) | `<your-auth0-domain>` |
+| `AUTH0_AUDIENCE` | Auth0 API identifier / JWT audience (server-side) | `https://<your-deployment-domain>/api/mcp` |
 | `MAPP_API_BASE_URL` | Fixed downstream Mapp API endpoint | `https://intelligence.eu.mapp.com` |
 | `AUTH0_ACTION_SECRET` | Shared HMAC secret for session tokens issued by the Auth0 Post-Login Action | 64-char hex string |
-| `AUTH0_SETTINGS_CLIENT_ID` | Auth0 Regular Web App client ID for the settings page OAuth flow | `zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33` |
+| `AUTH0_SETTINGS_CLIENT_ID` | Auth0 Regular Web App client ID for the settings page OAuth flow | `<your-settings-client-id>` |
 | `AUTH0_SETTINGS_CLIENT_SECRET` | Auth0 Regular Web App client secret | (secret, from Auth0 dashboard) |
 | `CREDENTIAL_ENCRYPTION_KEY` | AES-256-GCM encryption key for credential storage | 64-char hex string |
 | `KV_REST_API_URL` | Upstash Redis REST URL (auto-set by Vercel KV integration) | `https://...upstash.io` |
@@ -81,7 +81,7 @@ These are exposed to the browser via `NEXT_PUBLIC_` prefix. They contain only no
 
 | Variable | Purpose | Value |
 |---|---|---|
-| `NEXT_PUBLIC_AUTH0_DOMAIN` | Auth0 domain for client-side redirect construction | `mapp-product.eu.auth0.com` |
+| `NEXT_PUBLIC_AUTH0_DOMAIN` | Auth0 domain for client-side redirect construction | `<your-auth0-domain>` |
 | `NEXT_PUBLIC_AUTH0_AUDIENCE` | Audience for client-side authorization requests | same as `AUTH0_AUDIENCE` |
 | `NEXT_PUBLIC_AUTH0_SETTINGS_CLIENT_ID` | Client ID for client-side authorization redirect | same as `AUTH0_SETTINGS_CLIENT_ID` |
 
@@ -277,7 +277,7 @@ If `AUTH0_ACTION_SECRET` is rotated, the value must be updated in both:
 ### 1. Health Check
 
 ```bash
-curl https://mapp-intelligence-mcp-remote.vercel.app/api/health
+curl https://<your-deployment-domain>/api/health
 ```
 
 Expected response (HTTP 200):
@@ -294,15 +294,15 @@ HTTP 503 indicates one or more environment variables are missing. Missing keys a
 ### 2. OAuth Metadata
 
 ```bash
-curl https://mapp-intelligence-mcp-remote.vercel.app/.well-known/oauth-protected-resource
+curl https://<your-deployment-domain>/.well-known/oauth-protected-resource
 ```
 
 Expected response:
 
 ```json
 {
-  "resource": "https://mapp-intelligence-mcp-remote.vercel.app",
-  "authorization_servers": ["https://mapp-product.eu.auth0.com"]
+  "resource": "https://<your-deployment-domain>",
+  "authorization_servers": ["https://<your-auth0-domain>"]
 }
 ```
 
@@ -310,7 +310,7 @@ Expected response:
 
 ```bash
 # Without a token — should return 401
-curl -X POST https://mapp-intelligence-mcp-remote.vercel.app/api/mcp \
+curl -X POST https://<your-deployment-domain>/api/mcp \
   -H "Content-Type: application/json"
 
 # Response: HTTP 401 Unauthorized
@@ -318,7 +318,7 @@ curl -X POST https://mapp-intelligence-mcp-remote.vercel.app/api/mcp \
 
 ```bash
 # ChatGPT-focused endpoint (also should return 401 without token)
-curl -X POST https://mapp-intelligence-mcp-remote.vercel.app/api/mcp-chatgpt \
+curl -X POST https://<your-deployment-domain>/api/mcp-chatgpt \
   -H "Content-Type: application/json"
 
 # Response: HTTP 401 Unauthorized
@@ -326,7 +326,7 @@ curl -X POST https://mapp-intelligence-mcp-remote.vercel.app/api/mcp-chatgpt \
 
 ### 4. Settings Page
 
-Visit `https://mapp-intelligence-mcp-remote.vercel.app/settings` in a browser. You should be redirected to the Auth0 Universal Login page.
+Visit `https://<your-deployment-domain>/settings` in a browser. You should be redirected to the Auth0 Universal Login page.
 
 ---
 

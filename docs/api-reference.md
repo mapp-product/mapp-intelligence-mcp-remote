@@ -10,6 +10,7 @@ This document describes every HTTP endpoint exposed by the Mapp Intelligence MCP
 2. [Endpoints](#endpoints)
    - [POST/GET/DELETE `/api/mcp`](#postgetdelete-apimcp) — MCP Streamable HTTP
    - [POST/GET/DELETE `/api/mcp-chatgpt`](#postgetdelete-apimcp-chatgpt) — ChatGPT-focused MCP endpoint
+   - [POST/GET/DELETE `/api/mcp-chatgpt/mcp`](#postgetdelete-apimcp-chatgptmcp) — Compatibility endpoint
    - [GET `/api/settings`](#get-apisettings) — Credential status
    - [POST `/api/settings`](#post-apisettings) — Save credentials
    - [DELETE `/api/settings`](#delete-apisettings) — Remove credentials
@@ -128,7 +129,116 @@ Same Streamable HTTP transport as `/api/mcp`.
 - Registers UI resources:
   - `ui://widget/analytics.html`
   - `ui://widget/kpi.html`
-- Tool reference: [chatgpt-tools.md](./chatgpt-tools.md)
+
+#### Tool Inventory
+
+The ChatGPT endpoint exposes the same 13 tools as the generic endpoint:
+
+- Discovery: `list_dimensions_and_metrics`, `list_segments`, `list_dynamic_timefilters`
+- Usage: `get_analysis_usage`
+- Analysis: `run_analysis`, `create_analysis_query`, `check_analysis_status`, `get_analysis_result`, `cancel_analysis_query`
+- Reports: `run_report`, `create_report_query`, `check_report_status`, `cancel_report_query`
+
+Legacy guided ChatGPT-specific tools are not part of active registration.
+
+#### Shared Input and Execution Behavior
+
+Input schemas, downstream Mapp API behavior, and auth/credential requirements are aligned with the generic endpoint implementation in `lib/unified-tool-definitions.ts`.
+
+#### ChatGPT Response Contract
+
+Each successful tool response includes:
+
+- `content`: full JSON payload text (non-lossy)
+- `structuredContent` envelope:
+  - `tool`
+  - `category` (`discovery | usage | analysis | report`)
+  - `data` (raw tool result object)
+  - `summary` (`kind`, `keys`, `rowCount`, `warnings`)
+- `_meta` with widget/output template hints
+
+Representative shape:
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{ ... full JSON payload ... }"
+    }
+  ],
+  "structuredContent": {
+    "tool": "run_analysis",
+    "category": "analysis",
+    "data": {},
+    "summary": {
+      "kind": "object",
+      "keys": ["rows", "columnHeaders"],
+      "rowCount": 42,
+      "warnings": []
+    }
+  },
+  "_meta": {
+    "openai/outputTemplate": "ui://widget/analytics.html",
+    "ui": {
+      "resourceUri": "ui://widget/analytics.html"
+    }
+  }
+}
+```
+
+#### Widget Resources
+
+- `ui://widget/analytics.html`
+- `ui://widget/kpi.html`
+
+Category mapping:
+
+- `usage` -> KPI widget
+- all other categories -> analytics widget
+
+#### ChatGPT Error Codes
+
+Tool failures are surfaced with prefixed codes (for example `[E_MAPP_API] ...`) and logged with tool-outcome telemetry.
+
+Common codes:
+
+- `E_AUTH_REQUIRED`
+- `E_CREDENTIALS_MISSING`
+- `E_MAPP_AUTH`
+- `E_MAPP_API`
+- `E_INTERNAL`
+
+Non-fatal warning code:
+
+- `WARN_QUOTA_ZERO` (quota maximum is `0`)
+
+---
+
+### POST/GET/DELETE `/api/mcp-chatgpt/mcp`
+
+**File:** `app/api/mcp-chatgpt/mcp/route.ts`
+
+Compatibility MCP endpoint for clients that automatically append `/mcp` to a configured base path.
+
+#### Authentication
+
+| Scheme | Required |
+|---|---|
+| Bearer token (Auth0 JWT) | Yes |
+
+#### Request
+
+Same Streamable HTTP transport as `/api/mcp-chatgpt`.
+
+- **Method:** `POST`, `GET`, `DELETE`
+- **Content-Type:** `application/json`
+- **Max duration:** 120 seconds
+
+#### Notes
+
+- Tool inventory and response contract are the same as `/api/mcp-chatgpt`.
+- Use this route only when a client cannot target `/api/mcp-chatgpt` directly.
 
 ---
 

@@ -22,9 +22,9 @@ This document describes the complete Auth0 tenant configuration for the Mapp Int
 
 | Property | Value |
 |---|---|
-| Domain | `mapp-product.eu.auth0.com` |
-| Region | EU |
-| Default Audience | `https://mapp-intelligence-mcp.vercel.app/api/mcp` |
+| Domain | `<your-auth0-domain>` |
+| Region | `<your-tenant-region>` |
+| Default Audience | `https://<your-deployment-domain>/api/mcp` |
 
 Setting the **default audience** at the tenant level ensures that tokens issued by any client automatically target the Mapp MCP API resource server, without requiring clients to explicitly pass an `audience` parameter.
 
@@ -35,7 +35,7 @@ Setting the **default audience** at the tenant level ensures that tokens issued 
 | Property | Value |
 |---|---|
 | Name | Mapp Intelligence MCP |
-| Identifier / Audience | `https://mapp-intelligence-mcp.vercel.app/api/mcp` |
+| Identifier / Audience | `https://<your-deployment-domain>/api/mcp` |
 | Signing Algorithm | RS256 |
 
 This single audience secures both MCP routes exposed by the app:
@@ -69,10 +69,10 @@ This application is used exclusively by the `/settings` page to provide a conven
 
 | Property | Value |
 |---|---|
-| Client ID | `zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33` |
+| Client ID | `<your-settings-client-id>` |
 | Type | Regular Web Application |
 | OIDC Conformant | Yes |
-| Allowed Callback URLs | `https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback` |
+| Allowed Callback URLs | `https://<your-deployment-domain>/api/auth/callback` |
 | Grant types | Authorization Code only |
 
 The settings page needs a stable `client_id` and server-side `client_secret` to perform the authorization code exchange at `/api/auth/callback`. Unlike dynamic MCP clients, this is a first-party application with a known callback URL.
@@ -84,12 +84,12 @@ The settings page needs a stable `client_id` and server-side `client_secret` to 
 | Property | Value |
 |---|---|
 | Type | Database (Username-Password-Authentication) |
-| Connection ID | `con_jT0vvl4nrbq2VTui` |
-| Domain aliases | `["mapp.com"]` |
+| Connection ID | `<your-db-connection-id>` |
+| Domain aliases | `["<allowed-email-domain>"]` |
 | Password policy | `good` |
 | Brute force protection | Enabled |
 
-The `domain_aliases` setting restricts sign-up to `@mapp.com` email addresses at the Auth0 connection level. This is a first line of defence, with a second enforcement layer in the Post-Login Action (see below).
+The `domain_aliases` setting restricts sign-up to `@<allowed-email-domain>` email addresses at the Auth0 connection level. This is a first line of defence, with a second enforcement layer in the Post-Login Action (see below).
 
 ---
 
@@ -99,20 +99,20 @@ The `domain_aliases` setting restricts sign-up to `@mapp.com` email addresses at
 
 | Property | Value |
 |---|---|
-| Action ID | `3251f9d0-f7b1-4b2c-91e8-99ddf640918f` |
+| Action ID | `<your-post-login-action-id>` |
 | Trigger | Login flow (post-login) |
 | Runtime | Node 22 |
 
 This action fires after every successful Auth0 login. It has two responsibilities:
 
-1. **Enforce domain restriction** — deny login if the user's email domain is not `mapp.com`
+1. **Enforce domain restriction** — deny login if the user's email domain is not `<allowed-email-domain>`
 2. **Trigger onboarding** — if the user has never configured their Mapp credentials, redirect them to the setup page before completing login
 
 ### Action Secrets
 
 | Secret | Purpose |
 |---|---|
-| `SETUP_URL` | URL of the `/setup` page (e.g. `https://mapp-intelligence-mcp-remote.vercel.app/setup`) |
+| `SETUP_URL` | URL of the `/setup` page (e.g. `https://<your-deployment-domain>/setup`) |
 | `SESSION_TOKEN_SECRET` | Shared HMAC secret for signing HS256 session tokens (must match `AUTH0_ACTION_SECRET` on the server) |
 | `AUTH0_DOMAIN` | Auth0 domain — used for constructing the `/continue` redirect URL |
 
@@ -123,7 +123,7 @@ POST-LOGIN TRIGGER
 │
 ├─ 1. Domain check
 │      Extract email domain from event.user.email
-│      If domain !== "mapp.com" → api.access.deny("Access restricted to @mapp.com emails")
+│      If domain !== "<allowed-email-domain>" → api.access.deny("Access restricted to @<allowed-email-domain> emails")
 │
 ├─ 2. Credentials configured check
 │      If event.user.app_metadata.mapp_credentials_configured === true
@@ -147,7 +147,7 @@ The session token is a short-lived HS256 JWT signed with `SESSION_TOKEN_SECRET`.
 ```json
 {
   "sub": "<auth0_user_id>",
-  "email": "<user@mapp.com>",
+  "email": "<user@your-domain>",
   "iss": "<AUTH0_DOMAIN>",
   "iat": <unix_timestamp>,
   "exp": <unix_timestamp + 3600>
@@ -177,39 +177,39 @@ This is the flow used when an MCP client (Claude, Cursor, etc.) connects for the
 
 ```
  1. MCP Client → GET /.well-known/oauth-protected-resource
-      Receives: { authorization_servers: ["https://mapp-product.eu.auth0.com"] }
+      Receives: { authorization_servers: ["https://<your-auth0-domain>"] }
 
  2. MCP Client → Auth0 Dynamic Client Registration
-      POST https://mapp-product.eu.auth0.com/oidc/register
+      POST https://<your-auth0-domain>/oidc/register
       Receives: { client_id, ... }
 
  3. MCP Client → Auth0 Authorization Endpoint
-      GET https://mapp-product.eu.auth0.com/authorize
+      GET https://<your-auth0-domain>/authorize
         ?client_id=<dynamic_client_id>
         &response_type=code
         &redirect_uri=<client_callback>
         &scope=openid profile email
-        &audience=https://mapp-intelligence-mcp.vercel.app/api/mcp
+        &audience=https://<your-deployment-domain>/api/mcp
         &code_challenge=<PKCE>
         &state=<random>
 
  4. User logs in via Auth0 Universal Login
 
  5. Post-Login Action fires:
-      a. Domain check (@mapp.com enforcement)
+      a. Domain check (@<allowed-email-domain> enforcement)
       b. If first-time user:
            - Action generates session_token
            - Redirects to /setup?session_token=...
       c. User enters Mapp credentials on /setup page
       d. /setup page → POST /api/setup (saves encrypted creds to Redis)
-      e. /setup page → browser redirect to https://mapp-product.eu.auth0.com/continue
+      e. /setup page → browser redirect to https://<your-auth0-domain>/continue
       f. Action's onContinuePostLogin: sets app_metadata.mapp_credentials_configured = true
       g. If returning user (credentials already configured): skip b–f
 
  6. Auth0 → redirect to MCP client callback with authorization code
 
  7. MCP Client → Auth0 token endpoint
-      POST https://mapp-product.eu.auth0.com/oauth/token
+      POST https://<your-auth0-domain>/oauth/token
         grant_type=authorization_code
         code=<code>
         code_verifier=<PKCE verifier>
@@ -234,12 +234,12 @@ This flow is used when an existing user wants to update or delete their stored M
 
  3. /api/auth/login generates OAuth state + PKCE verifier/challenge,
     sets short-lived HttpOnly cookies, and redirects to Auth0:
-        GET https://mapp-product.eu.auth0.com/authorize
-          ?client_id=zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33
+        GET https://<your-auth0-domain>/authorize
+          ?client_id=<your-settings-client-id>
           &response_type=code
-          &redirect_uri=https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback
+          &redirect_uri=https://<your-deployment-domain>/api/auth/callback
           &scope=openid profile email
-          &audience=https://mapp-intelligence-mcp.vercel.app/api/mcp
+          &audience=https://<your-deployment-domain>/api/mcp
           &code_challenge=<S256 challenge>
           &code_challenge_method=S256
           &state=<random>
@@ -250,14 +250,14 @@ This flow is used when an existing user wants to update or delete their stored M
  5. Auth0 → GET /api/auth/callback?code=<code>&state=<state>
 
  6. /api/auth/callback validates state + PKCE cookies, then exchanges code:
-      POST https://mapp-product.eu.auth0.com/oauth/token
+      POST https://<your-auth0-domain>/oauth/token
         grant_type=authorization_code
-        client_id=zk99QhX2rRo5H9hkXcvh4ZcLHcccOf33
+        client_id=<your-settings-client-id>
         client_secret=<AUTH0_SETTINGS_CLIENT_SECRET>
         code=<code>
         code_verifier=<pkce_verifier_from_cookie>
-        redirect_uri=https://mapp-intelligence-mcp-remote.vercel.app/api/auth/callback
-        audience=https://mapp-intelligence-mcp.vercel.app/api/mcp
+        redirect_uri=https://<your-deployment-domain>/api/auth/callback
+        audience=https://<your-deployment-domain>/api/mcp
 
  7. /api/auth/callback redirects to:
       /settings#access_token=<access_token>
@@ -291,9 +291,9 @@ The `/.well-known/oauth-protected-resource` endpoint returns a JSON document con
 
 ```json
 {
-  "resource": "https://mapp-intelligence-mcp-remote.vercel.app",
+  "resource": "https://<your-deployment-domain>",
   "authorization_servers": [
-    "https://mapp-product.eu.auth0.com"
+    "https://<your-auth0-domain>"
   ]
 }
 ```
